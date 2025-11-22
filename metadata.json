@@ -1,0 +1,7 @@
+{
+  "name": "Copy of በቃል photo editor",
+  "description": "A highly advanced, cinematic image intelligence tool powered by Gemini 2.5 Flash Image. Zoom, analyze, and enhance imagery using natural language commands.",
+  "requestFramePermissions": [
+    "microphone"
+  ]
+}
