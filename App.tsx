@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { Sparkles, Activity, Command, RotateCcw, RotateCw, Home, ChevronLeft, Cpu, Layers, Maximize2, Image as ImageIcon, Download, Mic, MicOff, Zap, Globe, Key } from 'lucide-react';
+import { Sparkles, Activity, Command, RotateCcw, RotateCw, Home, ChevronLeft, Cpu, Layers, Maximize2, Image as ImageIcon, Download, Mic, MicOff, Zap, Globe, Key, Settings, X, Save } from 'lucide-react';
 import ImageViewer from './components/ImageViewer';
 import UploadZone from './components/UploadZone';
 import LogPanel from './components/LogPanel';
@@ -42,6 +42,9 @@ const TRANSLATIONS = {
 const App: React.FC = () => {
   // Init State
   const [hasApiKey, setHasApiKey] = useState(false);
+  const [userApiKey, setUserApiKey] = useState<string>('');
+  const [inputKey, setInputKey] = useState('');
+  const [showSettings, setShowSettings] = useState(false);
 
   // App Logic State
   const [currentImage, setCurrentImage] = useState<string | null>(null);
@@ -62,15 +65,31 @@ const App: React.FC = () => {
 
   const t = TRANSLATIONS[language];
 
-  // Check API Key on mount
+  // Check API Key on mount and load from storage
   useEffect(() => {
       const checkKey = async () => {
+          // 1. Check Local Storage
+          const storedKey = localStorage.getItem('gemini_api_key');
+          if (storedKey) {
+              setUserApiKey(storedKey);
+              setHasApiKey(true);
+              return;
+          }
+
+          // 2. Check AI Studio Context
           if (window.aistudio && window.aistudio.hasSelectedApiKey) {
               const hasKey = await window.aistudio.hasSelectedApiKey();
-              setHasApiKey(hasKey);
-          } else {
-              // If running outside of specific AI Studio context, assume key is present in env
-              setHasApiKey(true);
+              if (hasKey) {
+                  setHasApiKey(true);
+                  return;
+              }
+          } 
+          
+          // 3. Check Process Env (if running locally with .env)
+          // Note: Vite usually substitutes this at build time. 
+          // If empty object, ignore.
+          if (process.env.API_KEY) {
+               setHasApiKey(true);
           }
       };
       checkKey();
@@ -79,8 +98,28 @@ const App: React.FC = () => {
   const handleConnectApiKey = async () => {
       if (window.aistudio) {
           await window.aistudio.openSelectKey();
-          // Optimistically update, or recheck. For better UX we assume success or the loop repeats.
           setHasApiKey(true);
+      }
+  };
+
+  const handleSaveManualKey = () => {
+      if (inputKey.trim().length > 0) {
+          localStorage.setItem('gemini_api_key', inputKey.trim());
+          setUserApiKey(inputKey.trim());
+          setHasApiKey(true);
+          setShowSettings(false);
+      }
+  };
+
+  const clearApiKey = () => {
+      localStorage.removeItem('gemini_api_key');
+      setUserApiKey('');
+      setInputKey('');
+      setHasApiKey(false);
+      setShowSettings(false);
+      // Check AI Studio again just in case
+      if (window.aistudio && window.aistudio.hasSelectedApiKey) {
+          // We don't force clear AI Studio key as we can't, but we reset our app state
       }
   };
 
@@ -189,7 +228,7 @@ const App: React.FC = () => {
                 }
             });
             
-            await client.connect();
+            await client.connect(userApiKey);
             liveClientRef.current = client;
             
         } catch (e) {
@@ -227,7 +266,7 @@ const App: React.FC = () => {
   const handleExternalEdit = async (img: string, txt: string): Promise<string> => {
       setAppState(AppState.ANALYZING);
       try {
-          const enhancedImage = await editImage(img, txt);
+          const enhancedImage = await editImage(img, txt, userApiKey);
           setCurrentImage(enhancedImage);
           
           const newItem = {
@@ -314,21 +353,47 @@ const App: React.FC = () => {
                    <h1 className="text-4xl font-bold mb-2 tracking-tight">በቃል</h1>
                    <p className="text-sm text-white/40 uppercase tracking-[0.3em] mb-8">Neural Photo Editor</p>
                    
-                   <p className="text-white/60 mb-8 leading-relaxed font-light">
-                       Initialize connection to Gemini Neural Network to begin your enhancement session.
+                   <p className="text-white/60 mb-8 leading-relaxed font-light text-sm">
+                       Connect your Gemini API key to begin.
                    </p>
 
-                   <button 
-                       onClick={handleConnectApiKey}
-                       className="group relative px-8 py-4 bg-white text-black rounded-full font-medium tracking-wide hover:scale-105 transition-all duration-300 flex items-center gap-3 shadow-[0_0_20px_rgba(255,255,255,0.3)] hover:shadow-[0_0_30px_rgba(0,242,234,0.5)]"
-                   >
-                       <Key size={18} />
-                       <span>Connect Access Key</span>
-                       <div className="absolute inset-0 rounded-full border border-white/50 scale-105 opacity-0 group-hover:opacity-100 group-hover:scale-110 transition-all duration-500"></div>
-                   </button>
-                   
-                   <div className="mt-8 text-[10px] text-white/20 font-mono">
-                       SYSTEM STATUS: WAITING FOR AUTH
+                   {/* API Key Input for GitHub Pages / Web Deployment */}
+                   <div className="w-full space-y-4">
+                       <div className="relative">
+                           <Key size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-white/30" />
+                           <input 
+                                type="password"
+                                placeholder="Paste Gemini API Key"
+                                value={inputKey}
+                                onChange={(e) => setInputKey(e.target.value)}
+                                className="w-full bg-black/30 border border-white/10 rounded-full py-3 pl-12 pr-4 text-sm text-white placeholder-white/20 focus:outline-none focus:border-accent-cyan/50 transition-all"
+                           />
+                       </div>
+                       <button 
+                            onClick={handleSaveManualKey}
+                            disabled={!inputKey}
+                            className="w-full py-3 bg-white text-black rounded-full font-medium hover:bg-accent-cyan hover:text-black transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                       >
+                           Start Session
+                       </button>
+
+                        {/* Only show if AI Studio context is detected (or we want to offer it as option) */}
+                        {window.aistudio && (
+                            <>
+                                <div className="relative flex items-center py-2">
+                                    <div className="flex-grow border-t border-white/10"></div>
+                                    <span className="flex-shrink-0 mx-4 text-white/20 text-xs">OR</span>
+                                    <div className="flex-grow border-t border-white/10"></div>
+                                </div>
+                                <button 
+                                    onClick={handleConnectApiKey}
+                                    className="w-full py-3 bg-white/5 border border-white/10 text-white rounded-full font-medium hover:bg-white/10 transition-all flex items-center justify-center gap-2"
+                                >
+                                    <img src="https://www.gstatic.com/lamda/images/gemini_sparkle_v002_d4735304ff6292a690345.svg" className="w-4 h-4" alt="Gemini" />
+                                    Connect via AI Studio
+                                </button>
+                            </>
+                        )}
                    </div>
               </div>
           </div>
@@ -337,6 +402,62 @@ const App: React.FC = () => {
 
   return (
     <div className="relative h-screen w-screen overflow-hidden flex flex-col bg-black">
+        
+        {/* Settings Modal */}
+        {showSettings && (
+            <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm">
+                <div className="glass-panel p-8 rounded-3xl w-full max-w-md m-4 relative animate-in fade-in zoom-in duration-300">
+                    <button onClick={() => setShowSettings(false)} className="absolute top-4 right-4 text-white/40 hover:text-white">
+                        <X size={20} />
+                    </button>
+                    
+                    <h2 className="text-2xl font-bold mb-6 flex items-center gap-2">
+                        <Settings size={24} className="text-accent-cyan" />
+                        Settings
+                    </h2>
+                    
+                    <div className="space-y-6">
+                        <div className="space-y-2">
+                            <label className="text-xs uppercase tracking-wider text-white/40">API Key</label>
+                            <div className="relative">
+                                <Key size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-white/30" />
+                                <input 
+                                    type="password"
+                                    placeholder="Enter Gemini API Key"
+                                    value={userApiKey}
+                                    onChange={(e) => setUserApiKey(e.target.value)}
+                                    className="w-full bg-black/30 border border-white/10 rounded-xl py-3 pl-12 pr-4 text-sm text-white placeholder-white/20 focus:outline-none focus:border-accent-cyan/50 transition-all"
+                                />
+                            </div>
+                            <p className="text-[10px] text-white/30">
+                                Your key is stored locally in your browser.
+                            </p>
+                        </div>
+
+                        <div className="flex gap-3 pt-4">
+                            <button 
+                                onClick={() => {
+                                    localStorage.setItem('gemini_api_key', userApiKey);
+                                    setShowSettings(false);
+                                    addLog("Settings Saved", 'success');
+                                }}
+                                className="flex-1 bg-white text-black py-3 rounded-xl font-medium hover:bg-accent-cyan transition-colors flex items-center justify-center gap-2"
+                            >
+                                <Save size={16} />
+                                Save Changes
+                            </button>
+                            <button 
+                                onClick={clearApiKey}
+                                className="px-4 py-3 bg-red-500/10 border border-red-500/30 text-red-400 rounded-xl font-medium hover:bg-red-500/20 transition-colors"
+                            >
+                                Logout
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        )}
+
         {/* BACKGROUND DECORATIONS */}
         <div className="absolute inset-0 z-0 pointer-events-none">
             <div className={`absolute top-[-20%] left-[-10%] w-[50%] h-[50%] bg-accent-purple/20 blur-[120px] rounded-full opacity-50 animate-float ${isLiveMode ? 'animate-pulse bg-red-500/20' : ''}`}></div>
@@ -393,6 +514,14 @@ const App: React.FC = () => {
             {/* Right: Status Indicators & Actions */}
             <div className="flex flex-col gap-2 pointer-events-auto items-end">
                 <div className="flex gap-2">
+                     <button 
+                        onClick={() => setShowSettings(true)}
+                        className="glass-button px-2 py-2 md:px-3 rounded-full flex items-center gap-2 text-xs font-medium transition-all duration-300 text-white/80 hover:bg-white/10"
+                        title="Settings"
+                    >
+                        <Settings size={14} />
+                    </button>
+
                      <button 
                         onClick={toggleLanguage}
                         className="glass-button px-2 py-2 md:px-3 rounded-full flex items-center gap-2 text-xs font-medium transition-all duration-300 text-white/80 hover:bg-white/10"

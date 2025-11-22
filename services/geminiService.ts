@@ -6,13 +6,18 @@ import { GoogleGenAI, Modality } from "@google/genai";
  * 
  * @param base64Image The base64 string of the image (including data:image/... prefix or raw).
  * @param prompt The text instruction for editing (e.g., "Remove background", "Add retro filter").
+ * @param apiKey The Gemini API Key.
  * @returns The edited image as a base64 string.
  */
-export const editImage = async (base64Image: string, prompt: string): Promise<string> => {
+export const editImage = async (base64Image: string, prompt: string, apiKey: string): Promise<string> => {
   try {
-    // Initialize Gemini Client inside the function to ensure we get the latest API_KEY
-    // after the user has selected it via the UI.
-    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+    // Use provided key, fallback to env if available (though env is empty in vite build usually)
+    const key = apiKey || process.env.API_KEY;
+    if (!key) {
+        throw new Error("API Key is missing. Please provide a valid Gemini API Key in settings.");
+    }
+
+    const ai = new GoogleGenAI({ apiKey: key });
 
     // Clean base64 string if it contains metadata
     const base64Data = base64Image.split(',')[1] || base64Image;

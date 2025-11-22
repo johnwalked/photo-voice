@@ -28,9 +28,14 @@ export class LiveClient {
     this.config = config;
   }
 
-  async connect() {
-    // Initialize AI client here to ensure it uses the latest API_KEY from environment
-    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  async connect(apiKey: string) {
+    const key = apiKey || process.env.API_KEY;
+    if (!key) {
+        throw new Error("API Key is missing.");
+    }
+
+    // Initialize AI client here to ensure it uses the latest API_KEY
+    const ai = new GoogleGenAI({ apiKey: key });
 
     // Audio Contexts
     this.inputAudioContext = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 16000 });
